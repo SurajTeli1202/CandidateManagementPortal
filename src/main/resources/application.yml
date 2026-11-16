@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: candidates
+  datasource:
+    url: jdbc:h2:file:./data/candidatesdb
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+  flyway:
+    enabled: true
+  h2:
+    console:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
