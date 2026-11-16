@@ -134,6 +134,12 @@ public class Candidate {
         skills.remove(skill);
     }
 
+    // Mutates the managed collection instead of replacing it, so Hibernate only syncs the difference.
+    public void replaceSkills(Set<Skill> newSkills) {
+        skills.clear();
+        skills.addAll(newSkills);
+    }
+
     public Set<Skill> getSkills() {
         return Collections.unmodifiableSet(skills);
     }

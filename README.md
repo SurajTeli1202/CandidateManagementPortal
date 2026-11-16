@@ -80,9 +80,12 @@ resulting schema rather than generating it.
   queries, but remain in the database
 - Flyway migration for candidates, skills, their join table, constraints, and
   indexes
+- REST API under `/api/v1/candidates`: `POST` (201 + `Location`),
+  `GET /{id}`, `PUT /{id}` (requires the current `version`), `DELETE /{id}`
+  (soft delete, 204)
+- Errors are returned as RFC 7807 `ProblemDetail` (400, 404, 409, 500)
 
-The REST controllers, services, request/response DTOs, validation rules, and
-search endpoints have not been implemented yet.
+Search and filtering endpoints have not been implemented yet.
 
 ## Database notes
 
