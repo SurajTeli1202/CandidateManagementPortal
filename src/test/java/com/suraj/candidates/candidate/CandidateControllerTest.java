@@ -9,6 +9,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -69,6 +70,17 @@ class CandidateControllerTest {
     @Autowired
     CandidateControllerTest(MockMvc mockMvc) {
         this.mockMvc = mockMvc;
+    }
+
+    @Test
+    void mvcSliceAutomaticallyIncludesRequestIdFilter() throws Exception {
+        when(candidateService.getById(1L)).thenReturn(response(1L, 0L));
+
+        mockMvc.perform(get(BASE + "/1").header("X-Request-Id", "mvc-slice-123"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Request-Id", "mvc-slice-123"));
+
+        assertThat(MDC.get("requestId")).isNull();
     }
 
     @Test

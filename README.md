@@ -50,6 +50,22 @@ The configured Actuator endpoints include:
 - `http://localhost:8080/actuator/health`
 - `http://localhost:8080/actuator/info`
 
+## API documentation and request IDs
+
+Springdoc OpenAPI 3.0.3 provides Swagger UI at
+`http://localhost:8080/swagger-ui.html` (redirects to the UI) and the OpenAPI
+document at `http://localhost:8080/v3/api-docs`.
+
+Every request returns an `X-Request-Id` header. A supplied value is accepted
+only when it contains 1-64 letters, digits, underscores or hyphens; otherwise
+a UUID is generated. The ID is available as `requestId` in the logging MDC
+and is removed when request processing finishes.
+
+An INFO access line records the HTTP method, path, status and duration in
+milliseconds. It never includes query strings, request bodies or other
+headers. Actuator and Swagger paths are excluded from access logging, but
+still receive request IDs.
+
 ## Test and verify
 
 Run the test suite and package verification:
