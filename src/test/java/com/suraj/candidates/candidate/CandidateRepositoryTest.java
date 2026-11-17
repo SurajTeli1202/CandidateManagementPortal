@@ -5,9 +5,12 @@ import com.suraj.candidates.skill.Skill;
 import jakarta.persistence.EntityManager;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -26,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=validate")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
 @Import(JpaAuditingConfig.class)
+@ExtendWith(OutputCaptureExtension.class)
 class CandidateRepositoryTest {
 
     private final CandidateRepository candidateRepository;
@@ -89,11 +93,14 @@ class CandidateRepositoryTest {
     }
 
     @Test
-    void rejectsDuplicateEmail() {
-        candidateRepository.saveAndFlush(newCandidate("dup@example.com"));
+    void rejectsDuplicateEmailWithoutLoggingItsValue(CapturedOutput output) {
+        String email = "duplicate-log-check@example.com";
+        candidateRepository.saveAndFlush(newCandidate(email));
 
-        assertThatThrownBy(() -> candidateRepository.saveAndFlush(newCandidate("dup@example.com")))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> candidateRepository.saveAndFlush(newCandidate(email)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .rootCause().hasMessageContaining("UQ_CANDIDATE_EMAIL");
+        assertThat(output.getAll()).doesNotContain(email);
     }
 
     @Test

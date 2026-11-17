@@ -11,6 +11,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.HandlerMapping;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -23,13 +24,14 @@ public class RequestIdFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestIdFilter.class);
     private static final String HEADER = "X-Request-Id";
-    private static final Pattern VALID_ID = Pattern.compile("[A-Za-z0-9_-]+");
+    private static final Pattern VALID_UUID =
+            Pattern.compile("[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String suppliedId = request.getHeader(HEADER);
-        String requestId = suppliedId != null && suppliedId.length() <= 64 && VALID_ID.matcher(suppliedId).matches()
+        String requestId = suppliedId != null && VALID_UUID.matcher(suppliedId).matches()
                 ? suppliedId : UUID.randomUUID().toString();
         String path = request.getRequestURI().substring(request.getContextPath().length());
         long start = System.nanoTime();
@@ -42,7 +44,9 @@ public class RequestIdFilter extends OncePerRequestFilter {
         } finally {
             try {
                 if (shouldLog(path)) {
-                    log.info("HTTP {} {} status={} durationMs={}", request.getMethod(), path,
+                    Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+                    String route = pattern == null ? "unmatched" : pattern.toString();
+                    log.info("HTTP {} {} status={} durationMs={}", request.getMethod(), route,
                             completed ? response.getStatus() : HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
                             TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
                 }

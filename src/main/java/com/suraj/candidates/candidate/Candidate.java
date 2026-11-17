@@ -130,10 +130,6 @@ public class Candidate {
         skills.add(skill);
     }
 
-    public void removeSkill(Skill skill) {
-        skills.remove(skill);
-    }
-
     // Mutates the managed collection instead of replacing it, so Hibernate only syncs the difference.
     public void replaceSkills(Set<Skill> newSkills) {
         skills.clear();

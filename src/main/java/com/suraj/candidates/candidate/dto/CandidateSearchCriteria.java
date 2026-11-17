@@ -40,7 +40,7 @@ public record CandidateSearchCriteria(
         @DecimalMin("0") BigDecimal maxExperience,
         @Parameter(description = "Inclusive maximum notice period in days.")
         @Min(0) Integer maxNoticePeriod,
-        @Parameter(description = "Zero-based page number.",
+        @Parameter(description = "Zero-based page number; page * size must not exceed 100000. Narrow the search for larger offsets.",
                 schema = @Schema(type = "integer", format = "int32", defaultValue = "0"))
         @Min(0) Integer page,
         @Parameter(description = "Page size, from 1 to 100.",
@@ -66,6 +66,12 @@ public record CandidateSearchCriteria(
     @Schema(hidden = true)
     public boolean isExperienceRangeValid() {
         return minExperience == null || maxExperience == null || minExperience.compareTo(maxExperience) <= 0;
+    }
+
+    @AssertTrue(message = "page * size must not exceed 100000; narrow the search")
+    @Schema(hidden = true)
+    public boolean isPageOffsetValid() {
+        return (long) page * size <= 100_000;
     }
 
     public Pageable toPageable() {

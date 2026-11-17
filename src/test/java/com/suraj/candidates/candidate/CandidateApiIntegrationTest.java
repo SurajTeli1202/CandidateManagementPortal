@@ -2,25 +2,34 @@ package com.suraj.candidates.candidate;
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Full stack (controller, service, JPA, Flyway) against a private in-memory H2 database. */
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:candidates-e2e;DB_CLOSE_DELAY=-1")
 @AutoConfigureMockMvc
+@ExtendWith(OutputCaptureExtension.class)
 class CandidateApiIntegrationTest {
 
     private final MockMvc mockMvc;
@@ -28,6 +37,50 @@ class CandidateApiIntegrationTest {
     @Autowired
     CandidateApiIntegrationTest(MockMvc mockMvc) {
         this.mockMvc = mockMvc;
+    }
+
+    @ParameterizedTest
+    @CsvSource({"107374183,20", "5001,20", "100001,1"})
+    void searchRejectsOffsetsAbove100000WithAdviceToNarrowTheSearch(int page, int size) throws Exception {
+        mockMvc.perform(get("/api/v1/candidates")
+                        .param("page", Integer.toString(page))
+                        .param("size", Integer.toString(size)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Validation failed"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errors[0].field").value("pageOffsetValid"))
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("narrow the search")));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"5000,20", "1000,100", "100000,1"})
+    void searchAcceptsAnOffsetOfExactly100000ThroughTheRealRepository(int page, int size) throws Exception {
+        String lastName = "Offset" + size;
+        createSearchCandidate(lastName, "[]");
+
+        mockMvc.perform(get("/api/v1/candidates")
+                        .param("q", "search-" + lastName + "@example.test")
+                        .param("page", Integer.toString(page))
+                        .param("size", Integer.toString(size)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.page").value(page))
+                .andExpect(jsonPath("$.size").value(size))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    @Test
+    void invalidCandidateIdLogsTheMatchedTemplateWithoutTheEmail(CapturedOutput output) throws Exception {
+        String email = "person@example.com";
+
+        mockMvc.perform(get("/api/v1/candidates/" + email))
+                .andExpect(status().isBadRequest());
+
+        assertThat(output.getAll())
+                .contains("HTTP GET /api/v1/candidates/{id} status=400")
+                .doesNotContain(email);
     }
 
     @Test

@@ -16,7 +16,7 @@ JavaScript.
   install Maven separately.
 
 Set `JAVA_HOME` for the current shell and check which Java version Maven uses.
-The commands below were run on this project's development machine, where
+The Windows commands below were run on this project's development machine, where
 JDK 21 (Eclipse Temurin 21.0.13) is installed at
 `C:\path\to\jdk-21`. If your JDK 21 is elsewhere, use that
 directory instead.
@@ -30,11 +30,10 @@ java -version
 .\mvnw.cmd -v
 ```
 
-Linux/macOS (bash/zsh). This was checked in Git Bash on the same machine, so
-the path is in Git Bash form:
+Linux/macOS (bash/zsh). Replace the example path with your JDK 21 directory:
 
 ```shell
-export JAVA_HOME=/c/Users/user/.jdks/temurin-21
+export JAVA_HOME=/path/to/jdk-21
 export PATH="$JAVA_HOME/bin:$PATH"
 java -version
 ./mvnw -v
@@ -64,6 +63,11 @@ application with `Ctrl+C`.
   survives restarts.
 - Flyway creates and migrates the schema on startup.
 - The H2 console is disabled.
+
+### Persistence
+
+Data is stored in `./data` and survives application restarts. The default and
+demo profiles use the same database; deleting this directory removes the data.
 
 ### Demo profile (sample data and H2 console)
 
@@ -113,7 +117,9 @@ empty password.
 ## API overview
 
 Base path: `/api/v1/candidates`. Request and response bodies are JSON. Every
-response carries an `X-Request-Id` header.
+response carries an `X-Request-Id` header. Only valid UUID request IDs are echoed;
+otherwise a UUID is generated. Access logs use matched route templates (or
+`unmatched`), never raw URIs or query strings.
 
 | Method | Path | Success | Description |
 |---|---|---|---|
@@ -155,7 +161,7 @@ candidates are never returned.
 | `skillMatch` | `ALL` (default) or `ANY` |
 | `minExperience`, `maxExperience` | Inclusive, ≥ 0; min must not exceed max |
 | `maxNoticePeriod` | Inclusive, ≥ 0 days |
-| `page` | Zero-based, default `0` |
+| `page` | Zero-based, default `0`; `page * size` must not exceed `100000`, otherwise narrow the search |
 | `size` | 1–100, default `20` |
 | `sort` | `field,asc` or `field,desc`. Fields: `createdAt`, `updatedAt`, `firstName`, `lastName`, `experienceYears`, `status`. Default `createdAt,desc`. Nulls sort last, and `id` ascending is the tie-breaker. |
 
@@ -305,11 +311,7 @@ Run the full build and test suite:
 ./mvnw clean verify
 ```
 
-Stop any running instance of the application first.
-`CandidatesApplicationTests` opens the same `./data/candidatesdb` file, and H2
-locks it while the app is running.
-
-The suite contains 146 JUnit tests:
+The suite contains 162 JUnit tests:
 
 | Layer | Test classes | What they cover |
 |---|---|---|
@@ -319,8 +321,8 @@ The suite contains 146 JUnit tests:
 | Integration | `CandidateApiIntegrationTest`, `OpenApiIntegrationTest`, `DemoDataLoaderTest`, `StaticUiTest`, `CandidatesApplicationTests` (`@SpringBootTest`) | Full CRUD and search flow, the OpenAPI document and Swagger UI, demo loader idempotency, `GET /` serving the UI, and context startup. |
 | Unit | `CandidateMapperTest`, `SkillTest`, `RequestIdFilterTest` | Mapping and normalization, skill equality, request-ID validation and MDC cleanup. |
 
-Each `@SpringBootTest` class except `CandidatesApplicationTests` uses its own
-in-memory H2 database.
+Each `@SpringBootTest` class uses its own in-memory H2 database; tests do not
+open the application's `./data` database.
 
 There is also an optional browser test for the UI. It is not part of the
 Maven build and needs Node.js and Chrome or Edge (set `CHROME_PATH` if the

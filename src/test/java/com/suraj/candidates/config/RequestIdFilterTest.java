@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.servlet.HandlerMapping;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -49,7 +50,11 @@ class RequestIdFilterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"request-123_ID", "ABCxyz_09"})
+    @ValueSource(strings = {
+            "d3864f78-5b32-4bd0-9f98-3f1b11260bc3",
+            "D3864F78-5B32-4BD0-9F98-3F1B11260BC3",
+            "00000000-0000-0000-0000-000000000000"
+    })
     void echoesValidRequestIdAndMakesItAvailableInMdc(String id) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/candidates");
         request.addHeader("X-Request-Id", id);
@@ -64,7 +69,7 @@ class RequestIdFilterTest {
     }
 
     @Test
-    void acceptsRequestIdAtThe64CharacterLimit() throws Exception {
+    void replacesANonUuidRequestIdEvenWhenItIsWithinTheOldLengthLimit() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/candidates");
         String id = "a".repeat(64);
         request.addHeader("X-Request-Id", id);
@@ -72,7 +77,9 @@ class RequestIdFilterTest {
 
         filter.doFilter(request, response, (req, res) -> { });
 
-        assertThat(response.getHeader("X-Request-Id")).isEqualTo(id);
+        String generated = response.getHeader("X-Request-Id");
+        assertThat(generated).isNotNull().isNotEqualTo(id);
+        assertThat(UUID.fromString(generated).toString()).isEqualTo(generated);
     }
 
     @Test
@@ -90,7 +97,13 @@ class RequestIdFilterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", "contains space", "bad.id", "bad/id", "bad\nid", "\u00e9"})
+    @ValueSource(strings = {
+            "", "contains space", "bad.id", "bad/id", "bad\nid", "\u00e9",
+            "request-123_ID", "person@example.com", "1-1-1-1-1",
+            "d3864f785b324bd09f983f1b11260bc3",
+            "d3864f78-5b32-4bd0-9f98-3f1b11260bcg",
+            " d3864f78-5b32-4bd0-9f98-3f1b11260bc3 "
+    })
     void replacesInvalidRequestIdWithUuid(String suppliedId) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/candidates");
         request.addHeader("X-Request-Id", suppliedId);
@@ -152,8 +165,10 @@ class RequestIdFilterTest {
         request.addHeader("Authorization", "private-header");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        filter.doFilter(request, response, (req, res) ->
-                ((HttpServletResponse) res).setStatus(HttpServletResponse.SC_CREATED));
+        filter.doFilter(request, response, (req, res) -> {
+            req.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/candidates");
+            ((HttpServletResponse) res).setStatus(HttpServletResponse.SC_CREATED);
+        });
 
         assertThat(accessLog.list).hasSize(1);
         ILoggingEvent event = accessLog.list.getFirst();
@@ -161,6 +176,42 @@ class RequestIdFilterTest {
         assertThat(event.getFormattedMessage())
                 .matches("HTTP POST /api/v1/candidates status=201 durationMs=\\d+")
                 .doesNotContain("private-query", "private-body", "private-header");
+    }
+
+    @Test
+    void logsMatchedRouteAfterTheChainWithoutTheEmailInTheRawUri() throws Exception {
+        String email = "person@example.com";
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/candidates/" + email);
+        request.setQueryString("q=" + email);
+        request.addHeader("X-Request-Id", email);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (req, res) -> {
+            req.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/candidates/{id}");
+            ((HttpServletResponse) res).setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        });
+
+        assertThat(accessLog.list).hasSize(1);
+        ILoggingEvent event = accessLog.list.getFirst();
+        assertThat(event.getFormattedMessage())
+                .matches("HTTP GET /api/v1/candidates/\\{id} status=400 durationMs=\\d+")
+                .doesNotContain(email, "q=");
+        assertThat(event.getMDCPropertyMap().get("requestId")).isNotEqualTo(email);
+        assertThat(MDC.get("requestId")).isNull();
+    }
+
+    @Test
+    void logsUnmatchedWhenThereIsNoHandlerPattern() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/missing/person@example.com");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (req, res) ->
+                ((HttpServletResponse) res).setStatus(HttpServletResponse.SC_NOT_FOUND));
+
+        assertThat(accessLog.list).hasSize(1);
+        assertThat(accessLog.list.getFirst().getFormattedMessage())
+                .matches("HTTP GET unmatched status=404 durationMs=\\d+")
+                .doesNotContain("person@example.com", "/missing");
     }
 
     @ParameterizedTest

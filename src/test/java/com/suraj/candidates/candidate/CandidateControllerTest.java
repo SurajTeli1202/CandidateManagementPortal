@@ -76,9 +76,10 @@ class CandidateControllerTest {
     void mvcSliceAutomaticallyIncludesRequestIdFilter() throws Exception {
         when(candidateService.getById(1L)).thenReturn(response(1L, 0L));
 
-        mockMvc.perform(get(BASE + "/1").header("X-Request-Id", "mvc-slice-123"))
+        String requestId = "d3864f78-5b32-4bd0-9f98-3f1b11260bc3";
+        mockMvc.perform(get(BASE + "/1").header("X-Request-Id", requestId))
                 .andExpect(status().isOk())
-                .andExpect(header().string("X-Request-Id", "mvc-slice-123"));
+                .andExpect(header().string("X-Request-Id", requestId));
 
         assertThat(MDC.get("requestId")).isNull();
     }

@@ -26,5 +26,10 @@ management:
         include: health,info
 
 logging:
+  level:
+    # Constraint violations can include column values; GlobalExceptionHandler logs a sanitized message instead.
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: "OFF"
+    # Hibernate 7 emits the same JDBC errors through this category.
+    org.hibernate.orm.jdbc.error: "OFF"
   pattern:
     level: "%5p [requestId=%X{requestId:-}]"
