@@ -1,202 +1,372 @@
 # Candidate Management API
 
-A project for a REST API to manage candidate records, including CRUD,
-search, filtering, pagination, and sorting on a Flyway-managed schema.
-
-## Technology
-
-- Java 21
-- Spring Boot 4.1.2
-- Maven
-- Spring MVC, Spring Data JPA, Bean Validation, Flyway, Actuator
-- H2 database
+A Spring Boot learning project for managing candidate records. It provides a
+REST API under `/api/v1/candidates` to create, view, update, soft-delete and
+search candidates. Search supports free text, filters, sorting and pagination.
+It also includes optimistic locking, RFC 7807 error responses, a Flyway-managed
+H2 schema, OpenAPI/Swagger docs, request-ID logging, an optional demo data
+profile, and a small single-page web UI built with plain HTML, CSS and
+JavaScript.
 
 ## Requirements
 
-- JDK 21
-- No separate Maven installation is needed; the project includes the Maven
-  Wrapper.
+- **JDK 21.** `JAVA_HOME` must point to a JDK 21 installation, because the
+  Maven Wrapper uses it.
+- **Maven Wrapper.** It is included (`mvnw`, `mvnw.cmd`), so you don't need to
+  install Maven separately.
 
-Check the Java version Maven will use:
+Set `JAVA_HOME` for the current shell and check which Java version Maven uses.
+The commands below were run on this project's development machine, where
+JDK 21 (Eclipse Temurin 21.0.13) is installed at
+`C:\path\to\jdk-21`. If your JDK 21 is elsewhere, use that
+directory instead.
+
+Windows PowerShell:
+
+```powershell
+$env:JAVA_HOME = "C:\path\to\jdk-21"
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+java -version
+.\mvnw.cmd -v
+```
+
+Linux/macOS (bash/zsh). This was checked in Git Bash on the same machine, so
+the path is in Git Bash form:
 
 ```shell
+export JAVA_HOME=/c/Users/user/.jdks/temurin-21
+export PATH="$JAVA_HOME/bin:$PATH"
+java -version
 ./mvnw -v
 ```
 
-On Windows, use `.\mvnw.cmd -v`.
+`./mvnw -v` must report `Java version: 21...`. A `JAVA_HOME` change only applies
+to shells (and IDEs) started after the change. Already open terminals keep the
+old value.
 
-## Run
+## How to run
 
-Start the application with:
+Use `.\mvnw.cmd` on Windows PowerShell and `./mvnw` on Linux/macOS. Stop the
+application with `Ctrl+C`.
 
-```shell
-./mvnw spring-boot:run
-```
-
-On Windows:
+### Default profile (file-based H2)
 
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
 
-The application uses a file-based H2 database at
-`./data/candidatesdb` by default. The H2 console is disabled unless the `demo`
-profile is active.
+```shell
+./mvnw spring-boot:run
+```
 
-### Demo profile
+- The app starts on port 8080.
+- Data is stored in an H2 file database at `./data/candidatesdb`, so it
+  survives restarts.
+- Flyway creates and migrates the schema on startup.
+- The H2 console is disabled.
 
-Start with `--spring.profiles.active=demo` to enable the H2 console and load
-30 clearly fictional candidates into an empty database:
+### Demo profile (sample data and H2 console)
 
 ```powershell
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.profiles.active=demo"
 ```
 
-The demo data includes all statuses, Pune/Bangalore/Mumbai/Remote locations,
-experience from 0.5 to 15 years (and some unknown values), notice periods from
-0 to 90 days, varied skills, and candidates with no skills or missing optional
-fields. Names are fictional, surnames are `Demo`, and emails use `example.com`.
-Requests are Bean Validated and created through `CandidateService`, including
-its normal email and skill normalization.
-
-Loading is transactional and skipped if any candidate rows already exist,
-including soft-deleted rows. Restarts do not add duplicates or top up existing
-data. The profile uses the same configured database; it does not reset or
-replace existing records.
-
-With the demo profile active, the H2 console is available at
-`http://localhost:8080/h2-console`; connect with JDBC URL
-`jdbc:h2:file:./data/candidatesdb` and username `sa` (no password).
-
-The configured Actuator endpoints include:
-
-- `http://localhost:8080/actuator/health`
-- `http://localhost:8080/actuator/info`
-
-## Candidate web UI
-
-Open `http://localhost:8080/` after starting the application. Spring Boot serves
-the HTML, CSS, and JavaScript directly; there is no frontend build or external
-dependency. The page supports debounced text search, filters, sorting,
-pagination, and create/edit dialogs. Delete requires confirmation and uses the
-existing soft-delete API. Use **More filters** to expand the additional search
-fields; the summary shows how many are active even when the section is closed.
-Choose one or more status checkboxes to filter by any of those statuses.
-
-The editor keeps the version returned by the API. A concurrent-update conflict
-offers Reload, which discards unsaved edits and fetches the latest candidate.
-Duplicate-email and validation errors appear beside their fields. Empty
-optional values are submitted as null, and an empty skills input clears skills.
-
-To run the UI browser check separately, use
-`node --test src\test\browser\candidate-ui.test.js`. It requires Node.js and
-Chrome or Edge; set `CHROME_PATH` if the browser is not in a standard location.
-
-## API documentation and request IDs
-
-Springdoc OpenAPI 3.0.3 provides Swagger UI at
-`http://localhost:8080/swagger-ui.html` (redirects to the UI) and the OpenAPI
-document at `http://localhost:8080/v3/api-docs`.
-
-Every request returns an `X-Request-Id` header. A supplied value is accepted
-only when it contains 1-64 letters, digits, underscores or hyphens; otherwise
-a UUID is generated. The ID is available as `requestId` in the logging MDC
-and is removed when request processing finishes.
-
-An INFO access line records the HTTP method, path, status and duration in
-milliseconds. It never includes query strings, request bodies or other
-headers. Actuator and Swagger paths are excluded from access logging, but
-still receive request IDs.
-
-## Test and verify
-
-Run the test suite and package verification:
-
 ```shell
-./mvnw clean verify
+./mvnw spring-boot:run -Dspring-boot.run.arguments=--spring.profiles.active=demo
 ```
 
-On Windows:
+The `demo` profile:
+
+- Enables the H2 console.
+- Loads 30 clearly fictional candidates through `CandidateService`. They have
+  `example.com` emails and the surname `Demo`.
+
+Loading only happens when the candidate table is empty, including soft-deleted
+rows. If any rows already exist, it logs
+`Skipping demo data: candidate rows already exist` and changes nothing. The
+demo profile uses the same `./data/candidatesdb` file as the default profile.
+
+To start again from an empty database, stop the application and delete the
+`data` directory. Flyway recreates the schema on the next start.
+
+### PostgreSQL profile
+
+This project has no `postgres` profile and no `docker-compose` file. It runs on
+H2 only (see [Known limitations](#known-limitations)).
+
+## URLs
+
+With the application running locally on the default port:
+
+| URL | What it is |
+|---|---|
+| http://localhost:8080/ | Candidate web UI |
+| http://localhost:8080/swagger-ui.html | Swagger UI (redirects to `/swagger-ui/index.html`) |
+| http://localhost:8080/v3/api-docs | OpenAPI document (JSON) |
+| http://localhost:8080/actuator/health | Health check (`{"groups":["liveness","readiness"],"status":"UP"}`) |
+| http://localhost:8080/actuator/info | Info endpoint (currently returns `{}`) |
+| http://localhost:8080/h2-console | H2 console, **demo profile only** (404 otherwise) |
+
+H2 console login: JDBC URL `jdbc:h2:file:./data/candidatesdb`, user name `sa`,
+empty password.
+
+## API overview
+
+Base path: `/api/v1/candidates`. Request and response bodies are JSON. Every
+response carries an `X-Request-Id` header.
+
+| Method | Path | Success | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/candidates` | `201 Created` with `Location` header and body | Create a candidate |
+| `GET` | `/api/v1/candidates` | `200 OK` with a page of results | Search, filter, sort and page active candidates |
+| `GET` | `/api/v1/candidates/{id}` | `200 OK` | Get one active candidate (404 if missing or deleted) |
+| `PUT` | `/api/v1/candidates/{id}` | `200 OK` | Full update; requires the current `version` |
+| `DELETE` | `/api/v1/candidates/{id}` | `204 No Content` | Soft delete |
+
+### Request fields (POST and PUT)
+
+| Field | Rules |
+|---|---|
+| `firstName`, `lastName` | Required, max 100 characters |
+| `email` | Required, valid email, max 254 characters; stored trimmed and lowercased; unique |
+| `phone` | Max 30 characters |
+| `currentTitle`, `currentCompany`, `location` | Max 150 characters each |
+| `experienceYears` | Decimal ≥ 0, up to 3 integer digits and 1 decimal place |
+| `noticePeriodDays` | Integer ≥ 0 |
+| `status` | `NEW`, `SCREENING`, `INTERVIEWING`, `OFFERED`, `HIRED` or `REJECTED`. Defaults to `NEW` on create; if null on update, the current status is kept |
+| `notes` | Max 4000 characters |
+| `skills` | Up to 50 names, each 1–50 characters; stored trimmed, lowercased, deduplicated. Null or empty on update clears skills |
+| `version` | Required on `PUT` (the value from the last read); ignored on `POST` |
+
+PUT replaces the whole record. Omitted optional fields are cleared. It is not a
+PATCH.
+
+### Search query parameters (`GET /api/v1/candidates`)
+
+All parameters are optional. Filters are combined with AND. Soft-deleted
+candidates are never returned.
+
+| Parameter | Behaviour |
+|---|---|
+| `q` | Free text: max 100 characters and 5 whitespace-separated words. Each word must match (case-insensitive, substring) first name, last name, email, current title or current company. `%`, `_` and `!` are matched literally. |
+| `status` | One or more statuses, repeated (`status=NEW&status=SCREENING`) or comma-separated (`status=NEW,SCREENING`); matches any |
+| `location` | Max 150 characters; case-insensitive exact match |
+| `skills` | Comma-separated, max 20 entries of max 100 characters; normalized to lowercase |
+| `skillMatch` | `ALL` (default) or `ANY` |
+| `minExperience`, `maxExperience` | Inclusive, ≥ 0; min must not exceed max |
+| `maxNoticePeriod` | Inclusive, ≥ 0 days |
+| `page` | Zero-based, default `0` |
+| `size` | 1–100, default `20` |
+| `sort` | `field,asc` or `field,desc`. Fields: `createdAt`, `updatedAt`, `firstName`, `lastName`, `experienceYears`, `status`. Default `createdAt,desc`. Nulls sort last, and `id` ascending is the tie-breaker. |
+
+The response shape is:
+
+```json
+{ "content": [ ... ], "page": 0, "size": 10, "totalElements": 2, "totalPages": 1 }
+```
+
+### curl examples
+
+These examples use bash syntax (Linux/macOS or Git Bash on Windows). In
+Windows PowerShell, call `curl.exe`, because `curl` is an alias for
+`Invoke-WebRequest` there. Inline JSON quoting also differs in PowerShell, so
+Git Bash is easier for the POST and PUT examples. The IDs, versions and
+timestamps below come from one real run and will differ for you.
+
+**Create**
+
+```shell
+curl -i -X POST http://localhost:8080/api/v1/candidates \
+  -H "Content-Type: application/json" \
+  -d '{
+        "firstName": "Asha",
+        "lastName": "Readme",
+        "email": "asha.readme@example.com",
+        "currentTitle": "Backend Developer",
+        "currentCompany": "Example Corp",
+        "location": "Pune",
+        "experienceYears": 4.5,
+        "noticePeriodDays": 30,
+        "skills": ["Java", "Spring", "SQL"]
+      }'
+```
+
+```text
+HTTP/1.1 201
+X-Request-Id: 42635e43-639f-4f83-8b5d-b296d1d20d06
+Location: http://localhost:8080/api/v1/candidates/33
+Content-Type: application/json
+
+{"id":33,"firstName":"Asha","lastName":"Readme","email":"asha.readme@example.com","phone":null,"currentTitle":"Backend Developer","currentCompany":"Example Corp","location":"Pune","experienceYears":4.5,"noticePeriodDays":30,"status":"NEW","notes":null,"skills":["java","spring","sql"],"createdAt":"2026-11-17T12:56:28.036560Z","updatedAt":"2026-11-17T12:56:28.036560Z","version":0}
+```
+
+**Get by id**
+
+```shell
+curl -i http://localhost:8080/api/v1/candidates/33
+```
+
+**Update (send the current `version`)**
+
+```shell
+curl -i -X PUT http://localhost:8080/api/v1/candidates/33 \
+  -H "Content-Type: application/json" \
+  -d '{
+        "firstName": "Asha",
+        "lastName": "Readme",
+        "email": "asha.readme@example.com",
+        "currentTitle": "Senior Backend Developer",
+        "currentCompany": "Example Corp",
+        "location": "Pune",
+        "experienceYears": 5,
+        "noticePeriodDays": 30,
+        "status": "SCREENING",
+        "skills": ["java", "spring", "sql", "docker"],
+        "version": 0
+      }'
+```
+
+The response is `200 OK` with `"status":"SCREENING"` and `"version":1`.
+Sending `"version": 0` again now returns `409 Conflict`; see the error example
+below.
+
+**Search and filter with pagination**
+
+```shell
+curl "http://localhost:8080/api/v1/candidates?q=developer&status=NEW,SCREENING&location=pune&skills=java,spring&skillMatch=ALL&minExperience=2&maxExperience=10&maxNoticePeriod=60&page=0&size=10&sort=experienceYears,desc"
+```
+
+**Delete (soft delete)**
+
+```shell
+curl -i -X DELETE http://localhost:8080/api/v1/candidates/33
+```
+
+This returns `204 No Content`. A later `GET /api/v1/candidates/33` returns 404.
+
+## Error format
+
+Errors are RFC 7807 `ProblemDetail` responses with content type
+`application/problem+json`.
+
+| Status | Title |
+|---|---|
+| 400 | `Validation failed` (with an `errors` list) |
+| 400 | `Malformed request` (malformed JSON or an invalid enum value in the body) |
+| 404 | `Candidate not found` |
+| 409 | `Duplicate email` |
+| 409 | `Concurrent modification` |
+| 409 | `Data conflict` |
+| 500 | `Internal server error` (generic message; no internal details) |
+
+**Validation error (400).** This response came from posting
+`{"firstName":"","lastName":"Readme","email":"not-an-email","experienceYears":-1}`:
+
+```json
+{
+  "detail": "Request validation failed",
+  "instance": "/api/v1/candidates",
+  "status": 400,
+  "title": "Validation failed",
+  "errors": [
+    { "field": "email", "message": "must be a well-formed email address" },
+    { "field": "experienceYears", "message": "must be greater than or equal to 0" },
+    { "field": "firstName", "message": "must not be blank" }
+  ]
+}
+```
+
+Invalid search parameters use the same format. An inverted experience range
+is reported on the field `experienceRangeValid`.
+
+**Concurrent modification (409).** This came from a PUT with a stale `version`:
+
+```json
+{
+  "detail": "The candidate was modified by someone else. Reload it and try again.",
+  "instance": "/api/v1/candidates/33",
+  "status": 409,
+  "title": "Concurrent modification"
+}
+```
+
+A duplicate email returns `409` with title `Duplicate email` and detail
+`A candidate with this email already exists`.
+
+## Tests
+
+Run the full build and test suite:
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-The JPA repository tests use an in-memory H2 database. Flyway applies the
-migrations in `src/main/resources/db/migration`, and Hibernate validates the
-resulting schema rather than generating it.
-
-## Current implementation
-
-- `Candidate` and `Skill` JPA entities, with normalized lowercase skill names
-- Candidate status enum, auditing timestamps, optimistic locking, and
-  candidate-to-skill many-to-many mapping
-- `CandidateRepository` with `JpaRepository` and
-  `JpaSpecificationExecutor`
-- Soft deletion: deleted candidates are hidden from Hibernate-generated
-  queries, but remain in the database
-- Flyway migration for candidates, skills, their join table, constraints, and
-  indexes
-- REST API under `/api/v1/candidates`: `POST` (201 + `Location`),
-  `GET` (paged search), `GET /{id}`, `PUT /{id}` (requires the current
-  `version`), `DELETE /{id}` (soft delete, 204)
-- Errors are returned as RFC 7807 `ProblemDetail` (400, 404, 409, 500)
-
-## Search candidates
-
-`GET /api/v1/candidates` returns active candidates only. All query parameters
-are optional; supplied filters are combined with AND.
-
-| Parameter | Behavior |
-|---|---|
-| `q` | At most 100 characters and 5 whitespace-separated tokens. Every token must occur in at least one of first name, last name, email, current title, or current company, ignoring case. `%`, `_`, and `!` are treated literally, not as SQL wildcards. |
-| `status` | One or more enum names, such as `status=NEW&status=SCREENING` or `status=NEW,SCREENING`. Matches any requested status. |
-| `location` | At most 150 characters. Case-insensitive exact match, with surrounding whitespace trimmed. |
-| `skills` | At most 20 entries, each at most 100 characters. Comma-separated skill names, trimmed, lowercased, and deduplicated. |
-| `skillMatch` | `ALL` (default) or `ANY`. Ignored when no skills are supplied. |
-| `minExperience`, `maxExperience` | Inclusive nonnegative decimal bounds; minimum must not exceed maximum. Candidates with unknown experience do not match a supplied bound. |
-| `maxNoticePeriod` | Inclusive nonnegative day limit; candidates with unknown notice period do not match. |
-| `page` | Zero-based page number, default `0`. |
-| `size` | Page size from `1` to `100`, default `20`. |
-| `sort` | One `field,direction` pair, default `createdAt,desc`. Directions are `asc` or `desc` (case-insensitive). |
-
-Sortable fields are `createdAt`, `updatedAt`, `firstName`, `lastName`,
-`experienceYears`, and `status`. Every ordering ends with `id` ascending as a
-stable tie-breaker; `id` itself is not a user-selectable sort field. Every sort
-order specifies nulls last, including for ascending and descending experience.
-
-Example:
-
-```text
-GET /api/v1/candidates?q=java%20engineer&status=SCREENING&skills=java,spring&skillMatch=ALL&minExperience=2&size=10&sort=lastName,asc
+```shell
+./mvnw clean verify
 ```
 
-The response contains only `content` (a list of candidate response DTOs),
-`page`, `size`, `totalElements`, and `totalPages`, rather than Spring's internal
-`Page` representation. An out-of-range page has empty content but retains the
-matching total.
+Stop any running instance of the application first.
+`CandidatesApplicationTests` opens the same `./data/candidatesdb` file, and H2
+locks it while the app is running.
 
-Invalid enums, numeric values, page bounds, experience ranges, or sort pairs
-return `400 application/problem+json`. Spring Boot 4 reports query binding and
-validation failures as `MethodArgumentNotValidException`; the existing handler
-returns the same `errors` list of `{ "field": "...", "message": "..." }` as
-request-body validation. Conversion errors use a generic message without
-echoing rejected values. An inverted experience range uses the field
-`experienceRangeValid`.
+The suite contains 146 JUnit tests:
 
-Skill filtering uses correlated subqueries, not outer collection joins, so
-matching multiple skills does not duplicate candidates or inflate totals.
-Response mapping runs inside a read-only service transaction; the configured
-Hibernate batch fetch size of 50 handles lazy skill loading without a
-pagination fetch join.
+| Layer | Test classes | What they cover |
+|---|---|---|
+| Persistence | `CandidateRepositoryTest`, `CandidateSpecificationsTest` (`@DataJpaTest`) | Run against the Flyway-created schema with Hibernate `validate`. Cover save/read with skills, unique email, soft-delete visibility, auditing, optimistic locking, every search filter, skill ALL/ANY, literal wildcards, sorting and paging. |
+| Service | `CandidateServiceTest` (Mockito) | Business rules: duplicate email (including deleted rows), version checks, skill resolution, soft delete. |
+| Web | `CandidateControllerTest` (`@WebMvcTest` + `@MockitoBean`) | Status codes, `Location` header, query binding and validation, ProblemDetail errors, no leaking of internal details. |
+| Integration | `CandidateApiIntegrationTest`, `OpenApiIntegrationTest`, `DemoDataLoaderTest`, `StaticUiTest`, `CandidatesApplicationTests` (`@SpringBootTest`) | Full CRUD and search flow, the OpenAPI document and Swagger UI, demo loader idempotency, `GET /` serving the UI, and context startup. |
+| Unit | `CandidateMapperTest`, `SkillTest`, `RequestIdFilterTest` | Mapping and normalization, skill equality, request-ID validation and MDC cleanup. |
 
-## Database notes
+Each `@SpringBootTest` class except `CandidatesApplicationTests` uses its own
+in-memory H2 database.
 
-The schema is managed exclusively by Flyway. Hibernate is configured with
-`ddl-auto: validate`; do not use Hibernate schema generation to modify it.
-Add future schema changes as new Flyway migrations.
+There is also an optional browser test for the UI. It is not part of the
+Maven build and needs Node.js and Chrome or Edge (set `CHROME_PATH` if the
+browser is not in a standard location):
 
-The current migration uses SQL that works with H2 and PostgreSQL. MySQL may
-require a vendor-specific migration. Candidate email is unique across all
-rows, including soft-deleted candidates, so a deleted candidate's email
-remains reserved.
+```powershell
+node --test src\test\browser\candidate-ui.test.js
+```
+
+## Project structure
+
+```text
+src/main/java/com/suraj/candidates
+├── CandidatesApplication.java
+├── candidate/        Entity, enum, repository, specifications, service,
+│   │                 controller, mapper, exceptions
+│   └── dto/          CandidateRequest, CandidateResponse,
+│                     CandidateSearchCriteria, PageResponse
+├── skill/            Skill entity and repository
+├── config/           JPA auditing, OpenAPI, request-ID filter, demo data loader
+├── error/            GlobalExceptionHandler (ProblemDetail)
+└── ui/               HomeController (serves the UI at /)
+src/main/resources
+├── application.yml, application-demo.yml
+├── db/migration/V1__init.sql
+└── static/           index.html, app.js, styles.css
+src/test/java/...     JUnit tests (see above)
+src/test/browser/     Optional Node.js browser test
+docs/IMPLEMENTATION_NOTES.md   Detailed design and behaviour notes
+```
+
+## Known limitations
+
+- There is no authentication or authorization; anyone who can reach the app
+  can change data.
+- There is no restore endpoint for soft-deleted candidates. A deleted
+  candidate's email stays reserved, so it cannot be reused.
+- There are no separate skill endpoints. Skills are managed only through the
+  candidate `skills` list.
+- Only H2 is configured, with no PostgreSQL profile or `docker-compose`. The
+  migration avoids vendor-specific SQL and was written with PostgreSQL in mind,
+  but it has only been run on H2. MySQL will need a vendor-specific migration.
+- The `status` column has no database CHECK constraint, because of an H2 bug
+  (see the comment in `V1__init.sql`). Valid values are enforced by the Java
+  enum.
+- PUT is a full replacement; there is no PATCH.
+- The H2 console uses user `sa` with no password, and Swagger UI is always
+  enabled. Neither is suitable for production.
+- The UI browser test is not run by `mvnw verify`.
