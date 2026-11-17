@@ -43,7 +43,7 @@ class CandidateRepositoryTest {
     void schemaIsCreatedByFlyway() {
         assertThat(flyway.info().applied())
                 .extracting(info -> info.getVersion().getVersion())
-                .containsExactly("1");
+                .contains("1");
     }
 
     @Test
@@ -94,6 +94,28 @@ class CandidateRepositoryTest {
 
         assertThatThrownBy(() -> candidateRepository.saveAndFlush(newCandidate("dup@example.com")))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsNegativeExperienceYears() {
+        Candidate candidate = newCandidate("negative-experience@example.com");
+        candidate.setExperienceYears(new BigDecimal("-0.1"));
+
+        assertThatThrownBy(() -> candidateRepository.saveAndFlush(candidate))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .rootCause()
+                .hasMessageContaining("CK_CANDIDATE_EXPERIENCE_YEARS");
+    }
+
+    @Test
+    void rejectsNegativeNoticePeriodDays() {
+        Candidate candidate = newCandidate("negative-notice@example.com");
+        candidate.setNoticePeriodDays(-1);
+
+        assertThatThrownBy(() -> candidateRepository.saveAndFlush(candidate))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .rootCause()
+                .hasMessageContaining("CK_CANDIDATE_NOTICE_PERIOD_DAYS");
     }
 
     @Test

@@ -21,6 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -90,6 +92,28 @@ class CandidateServiceTest {
         assertThat(response.currentTitle()).isEqualTo("Engineer");
         assertThat(response.status()).isEqualTo(CandidateStatus.INTERVIEWING);
         assertThat(response.skills()).containsExactly("java");
+    }
+
+    @Test
+    void updateWithNullSkillsClearsExistingSkills() {
+        Candidate existing = existingCandidate(7L, 3L);
+        existing.addSkill(new Skill("java"));
+        when(candidateRepository.findById(7L)).thenReturn(Optional.of(existing));
+        when(candidateRepository.saveAndFlush(existing)).thenReturn(existing);
+
+        CandidateResponse response = service.update(7L, request("old@example.com", null, null, 3L));
+
+        assertThat(existing.getSkills()).isEmpty();
+        assertThat(response.skills()).isEmpty();
+    }
+
+    @Test
+    void updateChecksVersionBeforeEmailUniqueness() {
+        when(candidateRepository.findById(7L)).thenReturn(Optional.of(existingCandidate(7L, 3L)));
+
+        assertThatThrownBy(() -> service.update(7L, request("other@example.com", null, null, 2L)))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+        verify(candidateRepository, never()).countByEmailIncludingDeletedExcludingId(anyString(), anyLong());
     }
 
     @Test
