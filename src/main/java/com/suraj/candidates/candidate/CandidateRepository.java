@@ -11,6 +11,9 @@ import org.springframework.data.repository.query.Param;
  */
 public interface CandidateRepository extends JpaRepository<Candidate, Long>, JpaSpecificationExecutor<Candidate> {
 
+    @Query(value = "SELECT COUNT(*) FROM candidate", nativeQuery = true)
+    long countIncludingDeleted();
+
     // Native queries bypass @SQLRestriction, so soft-deleted rows are counted too
     // (their emails stay reserved by the unique constraint).
     @Query(value = "SELECT COUNT(*) FROM candidate WHERE email = :email", nativeQuery = true)

@@ -40,10 +40,33 @@ On Windows:
 ```
 
 The application uses a file-based H2 database at
-`./data/candidatesdb` by default. The H2 console is enabled in the development
-configuration and is available at `http://localhost:8080/h2-console`; connect
-with JDBC URL `jdbc:h2:file:./data/candidatesdb` and username `sa` (no
-password).
+`./data/candidatesdb` by default. The H2 console is disabled unless the `demo`
+profile is active.
+
+### Demo profile
+
+Start with `--spring.profiles.active=demo` to enable the H2 console and load
+30 clearly fictional candidates into an empty database:
+
+```powershell
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.profiles.active=demo"
+```
+
+The demo data includes all statuses, Pune/Bangalore/Mumbai/Remote locations,
+experience from 0.5 to 15 years (and some unknown values), notice periods from
+0 to 90 days, varied skills, and candidates with no skills or missing optional
+fields. Names are fictional, surnames are `Demo`, and emails use `example.com`.
+Requests are Bean Validated and created through `CandidateService`, including
+its normal email and skill normalization.
+
+Loading is transactional and skipped if any candidate rows already exist,
+including soft-deleted rows. Restarts do not add duplicates or top up existing
+data. The profile uses the same configured database; it does not reset or
+replace existing records.
+
+With the demo profile active, the H2 console is available at
+`http://localhost:8080/h2-console`; connect with JDBC URL
+`jdbc:h2:file:./data/candidatesdb` and username `sa` (no password).
 
 The configured Actuator endpoints include:
 

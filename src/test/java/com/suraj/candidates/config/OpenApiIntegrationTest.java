@@ -29,6 +29,11 @@ class OpenApiIntegrationTest {
     }
 
     @Test
+    void h2ConsoleIsDisabledWithoutDemoProfile() throws Exception {
+        assertThat(get("/h2-console/").statusCode()).isEqualTo(404);
+    }
+
+    @Test
     void swaggerUiRedirectsToWorkingUi() throws Exception {
         HttpResponse<String> redirect = get("/swagger-ui.html");
 
