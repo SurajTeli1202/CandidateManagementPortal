@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Candidate Management</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+<main>
+  <header class="page-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">C</div>
+      <div>
+        <p class="eyebrow">CANDIDATE WORKSPACE</p>
+        <h1>Candidate Management</h1>
+        <p class="page-subtitle">Your people, all in one place.</p>
+      </div>
+    </div>
+    <button id="create-candidate" type="button"><span aria-hidden="true">+</span> New candidate</button>
+  </header>
+
+  <!-- novalidate lets JavaScript put validation messages beside each field. -->
+  <form id="filters" class="panel search-panel" novalidate>
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">FIND THE RIGHT PEOPLE</p>
+        <h2>Search candidates</h2>
+        <p class="section-description">Search your talent pool or narrow the results with filters.</p>
+      </div>
+      <button type="reset" class="text-button">Clear all</button>
+    </div>
+    <div class="search-bar">
+      <div class="field search-field">
+        <label for="q">Search</label>
+        <input id="q" name="q" type="search" maxlength="100" placeholder="Search by name, email, title or company" aria-describedby="q-help q-error">
+        <small id="q-help">Up to 100 characters and 5 words.</small>
+        <span id="q-error" class="field-error" data-error-for="q"></span>
+      </div>
+      <div class="field">
+        <label for="sort">Sort by</label>
+        <select id="sort" name="sort" aria-describedby="sort-error"></select>
+        <span id="sort-error" class="field-error" data-error-for="sort"></span>
+      </div>
+      <div class="field">
+        <label for="size">Per page</label>
+        <select id="size" name="size" aria-describedby="size-error">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <span id="size-error" class="field-error" data-error-for="size"></span>
+      </div>
+    </div>
+    <!-- Native details keeps extra filters available to mouse and keyboard users. -->
+    <details id="advanced-filters">
+      <summary><span>More filters</span><span id="filter-count" class="filter-count">No filters active</span></summary>
+      <div class="filter-grid">
+        <fieldset class="field status-filter" aria-describedby="filter-status-help filter-status-error">
+          <legend>Status</legend>
+          <div id="filter-status" class="status-options"></div>
+          <small id="filter-status-help">Choose any number of statuses.</small>
+          <span id="filter-status-error" class="field-error" data-error-for="status"></span>
+        </fieldset>
+        <div class="field">
+          <label for="filter-location">Location (exact match)</label>
+          <input id="filter-location" name="location" maxlength="150" placeholder="e.g. Pune" aria-describedby="filter-location-error">
+          <span id="filter-location-error" class="field-error" data-error-for="location"></span>
+        </div>
+        <div class="field">
+          <label for="filter-skills">Skills, comma-separated</label>
+          <input id="filter-skills" name="skills" placeholder="e.g. java, aws" aria-describedby="filter-skills-help filter-skills-error">
+          <small id="filter-skills-help">Up to 20 names, 100 characters each.</small>
+          <span id="filter-skills-error" class="field-error" data-error-for="skills"></span>
+        </div>
+        <div class="field">
+          <label for="skillMatch">Skill match</label>
+          <select id="skillMatch" name="skillMatch" aria-describedby="skillMatch-error">
+            <option value="ALL">ALL requested skills</option>
+            <option value="ANY">ANY requested skill</option>
+          </select>
+          <span id="skillMatch-error" class="field-error" data-error-for="skillMatch"></span>
+        </div>
+        <div class="field">
+          <label for="minExperience">Minimum experience (years)</label>
+          <input id="minExperience" name="minExperience" type="number" min="0" step="any" aria-describedby="minExperience-error">
+          <span id="minExperience-error" class="field-error" data-error-for="minExperience"></span>
+        </div>
+        <div class="field">
+          <label for="maxExperience">Maximum experience (years)</label>
+          <input id="maxExperience" name="maxExperience" type="number" min="0" step="any" aria-describedby="maxExperience-error">
+          <span id="maxExperience-error" class="field-error" data-error-for="maxExperience"></span>
+        </div>
+        <div class="field">
+          <label for="maxNoticePeriod">Maximum notice period (days)</label>
+          <input id="maxNoticePeriod" name="maxNoticePeriod" type="number" min="0" max="2147483647" step="1" aria-describedby="maxNoticePeriod-error">
+          <span id="maxNoticePeriod-error" class="field-error" data-error-for="maxNoticePeriod"></span>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit">Apply filters</button>
+      </div>
+    </details>
+  </form>
+
+  <section class="panel results-panel" aria-labelledby="results-title">
+    <div class="results-heading">
+      <div>
+        <p class="eyebrow">YOUR TALENT POOL</p>
+        <h2 id="results-title">Candidates</h2>
+        <p class="section-description">Browse and manage your candidate records.</p>
+      </div>
+    </div>
+    <div id="list-error" class="error-banner" role="alert" hidden>
+      <span id="list-error-text"></span>
+      <button id="list-reload" class="secondary" type="button">Reload</button>
+    </div>
+    <p id="list-message" role="status" aria-live="polite"></p>
+    <div id="table-region" class="table-scroll" aria-busy="false" tabindex="0" role="region" aria-label="Candidates table">
+      <table>
+        <caption class="sr-only">Candidates matching the search filters</caption>
+        <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Email</th>
+          <th scope="col">Title and company</th>
+          <th scope="col">Location</th>
+          <th scope="col">Experience</th>
+          <th scope="col">Status</th>
+          <th scope="col">Skills</th>
+          <th scope="col">Actions</th>
+        </tr>
+        </thead>
+        <tbody id="candidate-rows"></tbody>
+      </table>
+    </div>
+    <nav class="pagination" aria-label="Candidate pages">
+      <button id="previous-page" class="secondary" type="button" disabled>Previous</button>
+      <span id="page-info" role="status" aria-live="polite">Page 0 of 0, 0 results</span>
+      <button id="next-page" class="secondary" type="button" disabled>Next</button>
+    </nav>
+  </section>
+</main>
+
+<!-- Native dialog supplies modal focus containment and Escape-key support. -->
+<dialog id="candidate-dialog" aria-labelledby="dialog-title">
+  <form id="candidate-form" novalidate>
+    <h2 id="dialog-title">New candidate</h2>
+    <p id="editor-message" role="status" aria-live="polite"></p>
+    <div id="editor-error" class="error-banner" role="alert" hidden>
+      <span id="editor-error-text"></span>
+      <button id="editor-reload" class="secondary" type="button" hidden>Reload</button>
+    </div>
+    <fieldset id="editor-fields">
+      <legend class="sr-only">Candidate details</legend>
+      <div class="editor-grid">
+        <div class="field">
+          <label for="firstName">First name (required)</label>
+          <input id="firstName" name="firstName" required maxlength="100" autocomplete="given-name" autofocus aria-describedby="firstName-error">
+          <span id="firstName-error" class="field-error" data-error-for="firstName"></span>
+        </div>
+        <div class="field">
+          <label for="lastName">Last name (required)</label>
+          <input id="lastName" name="lastName" required maxlength="100" autocomplete="family-name" aria-describedby="lastName-error">
+          <span id="lastName-error" class="field-error" data-error-for="lastName"></span>
+        </div>
+        <div class="field">
+          <label for="email">Email (required)</label>
+          <input id="email" name="email" type="email" required maxlength="254" autocomplete="email" aria-describedby="email-error">
+          <span id="email-error" class="field-error" data-error-for="email"></span>
+        </div>
+        <div class="field">
+          <label for="phone">Phone</label>
+          <input id="phone" name="phone" type="tel" maxlength="30" autocomplete="tel" aria-describedby="phone-error">
+          <span id="phone-error" class="field-error" data-error-for="phone"></span>
+        </div>
+        <div class="field">
+          <label for="currentTitle">Current title</label>
+          <input id="currentTitle" name="currentTitle" maxlength="150" aria-describedby="currentTitle-error">
+          <span id="currentTitle-error" class="field-error" data-error-for="currentTitle"></span>
+        </div>
+        <div class="field">
+          <label for="currentCompany">Current company</label>
+          <input id="currentCompany" name="currentCompany" maxlength="150" autocomplete="organization" aria-describedby="currentCompany-error">
+          <span id="currentCompany-error" class="field-error" data-error-for="currentCompany"></span>
+        </div>
+        <div class="field">
+          <label for="location">Location</label>
+          <input id="location" name="location" maxlength="150" aria-describedby="location-error">
+          <span id="location-error" class="field-error" data-error-for="location"></span>
+        </div>
+        <div class="field">
+          <label for="experienceYears">Experience (years)</label>
+          <input id="experienceYears" name="experienceYears" type="number" min="0" max="999.9" step="0.1" aria-describedby="experienceYears-error">
+          <span id="experienceYears-error" class="field-error" data-error-for="experienceYears"></span>
+        </div>
+        <div class="field">
+          <label for="noticePeriodDays">Notice period (days)</label>
+          <input id="noticePeriodDays" name="noticePeriodDays" type="number" min="0" max="2147483647" step="1" aria-describedby="noticePeriodDays-error">
+          <span id="noticePeriodDays-error" class="field-error" data-error-for="noticePeriodDays"></span>
+        </div>
+        <div class="field">
+          <label for="status">Status</label>
+          <select id="status" name="status" aria-describedby="status-error"></select>
+          <span id="status-error" class="field-error" data-error-for="status"></span>
+        </div>
+        <div class="field wide">
+          <label for="skills">Skills, comma-separated</label>
+          <input id="skills" name="skills" aria-describedby="skills-help skills-error">
+          <small id="skills-help">Up to 50 names, 50 characters each. Leave empty for no skills.</small>
+          <span id="skills-error" class="field-error" data-error-for="skills"></span>
+        </div>
+        <div class="field wide">
+          <label for="notes">Notes</label>
+          <textarea id="notes" name="notes" rows="3" maxlength="4000" aria-describedby="notes-error"></textarea>
+          <span id="notes-error" class="field-error" data-error-for="notes"></span>
+        </div>
+      </div>
+    </fieldset>
+    <div class="actions dialog-actions">
+      <button id="cancel-edit" class="secondary" type="button">Cancel</button>
+      <button id="save-candidate" type="submit">Save candidate</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>

@@ -73,6 +73,25 @@ The configured Actuator endpoints include:
 - `http://localhost:8080/actuator/health`
 - `http://localhost:8080/actuator/info`
 
+## Candidate web UI
+
+Open `http://localhost:8080/` after starting the application. Spring Boot serves
+the HTML, CSS, and JavaScript directly; there is no frontend build or external
+dependency. The page supports debounced text search, filters, sorting,
+pagination, and create/edit dialogs. Delete requires confirmation and uses the
+existing soft-delete API. Use **More filters** to expand the additional search
+fields; the summary shows how many are active even when the section is closed.
+Choose one or more status checkboxes to filter by any of those statuses.
+
+The editor keeps the version returned by the API. A concurrent-update conflict
+offers Reload, which discards unsaved edits and fetches the latest candidate.
+Duplicate-email and validation errors appear beside their fields. Empty
+optional values are submitted as null, and an empty skills input clears skills.
+
+To run the UI browser check separately, use
+`node --test src\test\browser\candidate-ui.test.js`. It requires Node.js and
+Chrome or Edge; set `CHROME_PATH` if the browser is not in a standard location.
+
 ## API documentation and request IDs
 
 Springdoc OpenAPI 3.0.3 provides Swagger UI at
