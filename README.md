@@ -1,6 +1,6 @@
 # Candidate Management API
 
-A Spring Boot learning project for managing candidate records. It provides a
+A Spring Boot REST application for managing candidate records. It provides a
 REST API under `/api/v1/candidates` to create, view, update, soft-delete and
 search candidates. Search supports free text, filters, sorting and pagination.
 It also includes optimistic locking, RFC 7807 error responses, a Flyway-managed
@@ -16,10 +16,7 @@ JavaScript.
   install Maven separately.
 
 Set `JAVA_HOME` for the current shell and check which Java version Maven uses.
-The Windows commands below were run on this project's development machine, where
-JDK 21 (Eclipse Temurin 21.0.13) is installed at
-`C:\path\to\jdk-21`. If your JDK 21 is elsewhere, use that
-directory instead.
+Replace the example paths below with the directory of your JDK 21 installation.
 
 Windows PowerShell:
 

@@ -1,4 +1,4 @@
-# Project: Candidate Management (learning project)
+# Project: Candidate Management
 
 A small Spring Boot REST application to manage and search candidate records.
 
