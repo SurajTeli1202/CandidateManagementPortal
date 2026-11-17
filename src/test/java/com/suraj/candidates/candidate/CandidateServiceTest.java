@@ -2,14 +2,20 @@ package com.suraj.candidates.candidate;
 
 import com.suraj.candidates.candidate.dto.CandidateRequest;
 import com.suraj.candidates.candidate.dto.CandidateResponse;
+import com.suraj.candidates.candidate.dto.CandidateSearchCriteria;
+import com.suraj.candidates.candidate.dto.PageResponse;
 import com.suraj.candidates.skill.Skill;
 import com.suraj.candidates.skill.SkillRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -23,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,6 +81,27 @@ class CandidateServiceTest {
         when(candidateRepository.findById(42L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getById(42L)).isInstanceOf(CandidateNotFoundException.class);
+    }
+
+    @Test
+    void searchMapsCandidatesAndPreservesPageMetadata() {
+        Candidate candidate = existingCandidate(7L, 3L);
+        candidate.replaceSkills(Set.of(new Skill("spring"), new Skill("java")));
+        CandidateSearchCriteria criteria = new CandidateSearchCriteria(
+                null, null, null, null, null, null, null, null, 1, 2, "lastName,asc");
+        when(candidateRepository.findAll(ArgumentMatchers.<Specification<Candidate>>any(),
+                any(Pageable.class))).thenReturn(new PageImpl<>(List.of(candidate), criteria.toPageable(), 3));
+
+        PageResponse<CandidateResponse> response = service.search(criteria);
+
+        assertThat(response.content()).extracting(CandidateResponse::id).containsExactly(7L);
+        assertThat(response.content().getFirst().skills()).containsExactly("java", "spring");
+        assertThat(response.page()).isEqualTo(1);
+        assertThat(response.size()).isEqualTo(2);
+        assertThat(response.totalElements()).isEqualTo(3);
+        assertThat(response.totalPages()).isEqualTo(2);
+        verify(candidateRepository).findAll(ArgumentMatchers.<Specification<Candidate>>any(),
+                eq(criteria.toPageable()));
     }
 
     @Test

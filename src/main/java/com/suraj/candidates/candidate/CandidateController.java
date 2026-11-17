@@ -2,12 +2,15 @@ package com.suraj.candidates.candidate;
 
 import com.suraj.candidates.candidate.dto.CandidateRequest;
 import com.suraj.candidates.candidate.dto.CandidateResponse;
+import com.suraj.candidates.candidate.dto.CandidateSearchCriteria;
+import com.suraj.candidates.candidate.dto.PageResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -37,6 +40,11 @@ public class CandidateController {
                 .buildAndExpand(created.id())
                 .toUri();
         return ResponseEntity.created(location).body(created);
+    }
+
+    @GetMapping
+    public PageResponse<CandidateResponse> search(@Valid @ModelAttribute CandidateSearchCriteria criteria) {
+        return candidateService.search(criteria);
     }
 
     @GetMapping("/{id}")

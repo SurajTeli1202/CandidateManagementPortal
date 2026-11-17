@@ -1,8 +1,7 @@
 # Candidate Management API
 
-A learning project for a REST API to manage candidate records. The project is
-being built in small steps; the current implementation focuses on the JPA
-domain model and Flyway-managed database schema.
+A project for a REST API to manage candidate records, including CRUD,
+search, filtering, pagination, and sorting on a Flyway-managed schema.
 
 ## Technology
 
@@ -81,11 +80,57 @@ resulting schema rather than generating it.
 - Flyway migration for candidates, skills, their join table, constraints, and
   indexes
 - REST API under `/api/v1/candidates`: `POST` (201 + `Location`),
-  `GET /{id}`, `PUT /{id}` (requires the current `version`), `DELETE /{id}`
-  (soft delete, 204)
+  `GET` (paged search), `GET /{id}`, `PUT /{id}` (requires the current
+  `version`), `DELETE /{id}` (soft delete, 204)
 - Errors are returned as RFC 7807 `ProblemDetail` (400, 404, 409, 500)
 
-Search and filtering endpoints have not been implemented yet.
+## Search candidates
+
+`GET /api/v1/candidates` returns active candidates only. All query parameters
+are optional; supplied filters are combined with AND.
+
+| Parameter | Behavior |
+|---|---|
+| `q` | At most 100 characters and 5 whitespace-separated tokens. Every token must occur in at least one of first name, last name, email, current title, or current company, ignoring case. `%`, `_`, and `!` are treated literally, not as SQL wildcards. |
+| `status` | One or more enum names, such as `status=NEW&status=SCREENING` or `status=NEW,SCREENING`. Matches any requested status. |
+| `location` | At most 150 characters. Case-insensitive exact match, with surrounding whitespace trimmed. |
+| `skills` | At most 20 entries, each at most 100 characters. Comma-separated skill names, trimmed, lowercased, and deduplicated. |
+| `skillMatch` | `ALL` (default) or `ANY`. Ignored when no skills are supplied. |
+| `minExperience`, `maxExperience` | Inclusive nonnegative decimal bounds; minimum must not exceed maximum. Candidates with unknown experience do not match a supplied bound. |
+| `maxNoticePeriod` | Inclusive nonnegative day limit; candidates with unknown notice period do not match. |
+| `page` | Zero-based page number, default `0`. |
+| `size` | Page size from `1` to `100`, default `20`. |
+| `sort` | One `field,direction` pair, default `createdAt,desc`. Directions are `asc` or `desc` (case-insensitive). |
+
+Sortable fields are `createdAt`, `updatedAt`, `firstName`, `lastName`,
+`experienceYears`, and `status`. Every ordering ends with `id` ascending as a
+stable tie-breaker; `id` itself is not a user-selectable sort field. Every sort
+order specifies nulls last, including for ascending and descending experience.
+
+Example:
+
+```text
+GET /api/v1/candidates?q=java%20engineer&status=SCREENING&skills=java,spring&skillMatch=ALL&minExperience=2&size=10&sort=lastName,asc
+```
+
+The response contains only `content` (a list of candidate response DTOs),
+`page`, `size`, `totalElements`, and `totalPages`, rather than Spring's internal
+`Page` representation. An out-of-range page has empty content but retains the
+matching total.
+
+Invalid enums, numeric values, page bounds, experience ranges, or sort pairs
+return `400 application/problem+json`. Spring Boot 4 reports query binding and
+validation failures as `MethodArgumentNotValidException`; the existing handler
+returns the same `errors` list of `{ "field": "...", "message": "..." }` as
+request-body validation. Conversion errors use a generic message without
+echoing rejected values. An inverted experience range uses the field
+`experienceRangeValid`.
+
+Skill filtering uses correlated subqueries, not outer collection joins, so
+matching multiple skills does not duplicate candidates or inflate totals.
+Response mapping runs inside a read-only service transaction; the configured
+Hibernate batch fetch size of 50 handles lazy skill loading without a
+pagination fetch join.
 
 ## Database notes
 

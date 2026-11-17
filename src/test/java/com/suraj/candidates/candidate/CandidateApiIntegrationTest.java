@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,6 +28,57 @@ class CandidateApiIntegrationTest {
     @Autowired
     CandidateApiIntegrationTest(MockMvc mockMvc) {
         this.mockMvc = mockMvc;
+    }
+
+    @Test
+    void searchFiltersSkillsAndReturnsStablePagesWithoutDeletedCandidates() throws Exception {
+        createSearchCandidate("Alpha", "[\"Java\", \"Spring\"]");
+        createSearchCandidate("Beta", "[\"Java\"]");
+        createSearchCandidate("Gamma", "[\"Kotlin\"]");
+        String deletedLocation = createSearchCandidate("Deleted", "[\"Java\", \"Spring\"]");
+        mockMvc.perform(delete(deletedLocation)).andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/candidates")
+                        .param("q", "searchfixture engineer")
+                        .param("status", "NEW,SCREENING")
+                        .param("location", "PUNE")
+                        .param("skills", " JAVA , Spring ")
+                        .param("minExperience", "4.5")
+                        .param("maxExperience", "4.5")
+                        .param("maxNoticePeriod", "30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].lastName").value("Alpha"))
+                .andExpect(jsonPath("$.content[0].skills").value(contains("java", "spring")))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
+
+        mockMvc.perform(get("/api/v1/candidates")
+                        .param("q", "searchfixture")
+                        .param("skills", "java,spring")
+                        .param("skillMatch", "ANY")
+                        .param("size", "1")
+                        .param("sort", "lastName,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].lastName").value("Alpha"))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2));
+
+        mockMvc.perform(get("/api/v1/candidates")
+                        .param("q", "searchfixture")
+                        .param("skills", "java,spring")
+                        .param("skillMatch", "ANY")
+                        .param("page", "1")
+                        .param("size", "1")
+                        .param("sort", "lastName,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].lastName").value("Beta"))
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2));
     }
 
     @Test
@@ -94,5 +146,26 @@ class CandidateApiIntegrationTest {
         Integer id = JsonPath.read(created.getResponse().getContentAsString(), "$.id");
         mockMvc.perform(delete("/api/v1/candidates/" + id))
                 .andExpect(status().isNotFound());
+    }
+
+    private String createSearchCandidate(String lastName, String skillsJson) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/candidates")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "firstName": "SearchFixture",
+                                  "lastName": "%s",
+                                  "email": "search-%s@example.test",
+                                  "currentTitle": "Engineer",
+                                  "location": "Pune",
+                                  "status": "SCREENING",
+                                  "experienceYears": 4.5,
+                                  "noticePeriodDays": 30,
+                                  "skills": %s
+                                }
+                                """.formatted(lastName, lastName, skillsJson)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return result.getResponse().getHeader("Location");
     }
 }

@@ -2,14 +2,22 @@ package com.suraj.candidates.candidate;
 
 import com.suraj.candidates.candidate.dto.CandidateRequest;
 import com.suraj.candidates.candidate.dto.CandidateResponse;
+import com.suraj.candidates.candidate.dto.CandidateSearchCriteria;
+import com.suraj.candidates.candidate.dto.PageResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -20,6 +28,7 @@ import java.util.stream.IntStream;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.not;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -60,6 +69,238 @@ class CandidateControllerTest {
     @Autowired
     CandidateControllerTest(MockMvc mockMvc) {
         this.mockMvc = mockMvc;
+    }
+
+    @Test
+    void searchReturnsOnlyTheDocumentedPageShapeAndUsesDefaults() throws Exception {
+        when(candidateService.search(any())).thenReturn(
+                new PageResponse<>(List.of(response(1L, 0L)), 0, 20, 1, 1));
+
+        mockMvc.perform(get(BASE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(5))
+                .andExpect(jsonPath("$.content[0].id").value(1))
+                .andExpect(jsonPath("$.content[0].skills[0]").value("java"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.pageable").doesNotExist());
+
+        ArgumentCaptor<CandidateSearchCriteria> captor = ArgumentCaptor.forClass(CandidateSearchCriteria.class);
+        verify(candidateService).search(captor.capture());
+        CandidateSearchCriteria criteria = captor.getValue();
+        assertThat(criteria.page()).isZero();
+        assertThat(criteria.size()).isEqualTo(20);
+        assertThat(criteria.skillMatch()).isEqualTo(SkillMatch.ALL);
+        assertThat(criteria.toPageable().getSort()).isEqualTo(Sort.by(
+                Sort.Order.desc("createdAt").nullsLast(), Sort.Order.asc("id").nullsLast()));
+    }
+
+    @Test
+    void searchBindsCommaSeparatedStatusesAndSkills() throws Exception {
+        when(candidateService.search(any())).thenReturn(new PageResponse<>(List.of(), 2, 10, 0, 0));
+
+        mockMvc.perform(get(BASE)
+                        .param("q", "Jane engineer")
+                        .param("status", "NEW,SCREENING")
+                        .param("location", "Pune")
+                        .param("skills", " Java ,Spring")
+                        .param("skillMatch", "ANY")
+                        .param("minExperience", "1.5")
+                        .param("maxExperience", "5.0")
+                        .param("maxNoticePeriod", "30")
+                        .param("page", "2")
+                        .param("size", "10")
+                        .param("sort", "lastName,asc"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<CandidateSearchCriteria> captor = ArgumentCaptor.forClass(CandidateSearchCriteria.class);
+        verify(candidateService).search(captor.capture());
+        CandidateSearchCriteria criteria = captor.getValue();
+        assertThat(criteria.q()).isEqualTo("Jane engineer");
+        assertThat(criteria.status()).containsExactlyInAnyOrder(CandidateStatus.NEW, CandidateStatus.SCREENING);
+        assertThat(criteria.location()).isEqualTo("Pune");
+        assertThat(new CandidateMapper().normalizeSkillNames(criteria.skills()))
+                .containsExactlyInAnyOrder("java", "spring");
+        assertThat(criteria.skillMatch()).isEqualTo(SkillMatch.ANY);
+        assertThat(criteria.minExperience()).isEqualByComparingTo("1.5");
+        assertThat(criteria.maxExperience()).isEqualByComparingTo("5.0");
+        assertThat(criteria.maxNoticePeriod()).isEqualTo(30);
+        assertThat(criteria.page()).isEqualTo(2);
+        assertThat(criteria.size()).isEqualTo(10);
+        assertThat(criteria.toPageable().getSort()).isEqualTo(Sort.by(
+                Sort.Order.asc("lastName").nullsLast(), Sort.Order.asc("id").nullsLast()));
+    }
+
+    @Test
+    void searchBindsRepeatedStatuses() throws Exception {
+        when(candidateService.search(any())).thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get(BASE).param("status", "NEW", "HIRED"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<CandidateSearchCriteria> captor = ArgumentCaptor.forClass(CandidateSearchCriteria.class);
+        verify(candidateService).search(captor.capture());
+        assertThat(captor.getValue().status()).containsExactlyInAnyOrder(CandidateStatus.NEW, CandidateStatus.HIRED);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "page,-1", "size,0", "size,101",
+            "minExperience,-0.1", "maxExperience,-0.1", "maxNoticePeriod,-1",
+            "sort,email:asc", "sort,email", "sort,lastName:sideways",
+            "sort,id:asc", "sort,skills.name:asc", "sort,lastName:asc:updatedAt"
+    })
+    void searchRejectsInvalidParameterValues(String field, String value) throws Exception {
+        mockMvc.perform(get(BASE).param(field, value.replace(':', ',')))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("Validation failed"))
+                .andExpect(jsonPath("$.errors[*].field").value(hasItems(field)))
+                .andExpect(result -> assertThat(result.getResolvedException())
+                        .isInstanceOf(MethodArgumentNotValidException.class));
+        verifyNoInteractions(candidateService);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "status,SLEEPING", "skillMatch,NONE", "page,abc", "size,2147483648",
+            "minExperience,abc", "maxExperience,abc", "maxNoticePeriod,abc"
+    })
+    void searchBindingFailuresReturnSanitizedFieldErrors(String field, String value) throws Exception {
+        mockMvc.perform(get(BASE).param(field, value))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("Validation failed"))
+                .andExpect(jsonPath("$.errors[0].field").value(field))
+                .andExpect(jsonPath("$.errors[0].message").value("Invalid value for this parameter"))
+                .andExpect(content().string(not(containsString(value))))
+                .andExpect(jsonPath("$.instance").value(BASE))
+                .andExpect(result -> assertThat(result.getResolvedException())
+                        .isInstanceOf(MethodArgumentNotValidException.class));
+        verifyNoInteractions(candidateService);
+    }
+
+    @Test
+    void searchRejectsBlankSkillNames() throws Exception {
+        mockMvc.perform(get(BASE).param("skills", "java, ,spring"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field").value(hasItems("skills[]")));
+        verifyNoInteractions(candidateService);
+    }
+
+    @Test
+    void searchRejectsTextLongerThan100Characters() throws Exception {
+        mockMvc.perform(get(BASE).param("q", "a".repeat(101)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[*].field").value(hasItems("q")));
+        verifyNoInteractions(candidateService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"one two three four five six", "  one\ttwo\nthree\rfour\ffive six  "})
+    void searchRejectsMoreThanFiveTextTokens(String q) throws Exception {
+        mockMvc.perform(get(BASE).param("q", q))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[*].field").value(hasItems("q")));
+        verifyNoInteractions(candidateService);
+    }
+
+    @Test
+    void searchRejectsMoreThan20Skills() throws Exception {
+        String skills = IntStream.rangeClosed(1, 21).mapToObj(index -> "skill" + index)
+                .collect(Collectors.joining(","));
+
+        mockMvc.perform(get(BASE).param("skills", skills))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[*].field").value(hasItems("skills")));
+        verifyNoInteractions(candidateService);
+    }
+
+    @Test
+    void searchRejectsSkillNamesLongerThan100Characters() throws Exception {
+        mockMvc.perform(get(BASE).param("skills", "a".repeat(101)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[*].field").value(hasItems("skills[]")));
+        verifyNoInteractions(candidateService);
+    }
+
+    @Test
+    void searchRejectsLocationsLongerThan150Characters() throws Exception {
+        mockMvc.perform(get(BASE).param("location", "a".repeat(151)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[*].field").value(hasItems("location")));
+        verifyNoInteractions(candidateService);
+    }
+
+    @Test
+    void searchAcceptsInputAtTheNewLimits() throws Exception {
+        when(candidateService.search(any())).thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0));
+        String skills = IntStream.range(10, 30)
+                .mapToObj(index -> "a".repeat(98) + index)
+                .collect(Collectors.joining(","));
+        String q = "  " + "a".repeat(88) + "\tb\nc\rd\fe  ";
+
+        assertThat(q).hasSize(100);
+        mockMvc.perform(get(BASE)
+                        .param("q", q)
+                        .param("skills", skills)
+                        .param("location", "a".repeat(150)))
+                .andExpect(status().isOk());
+        verify(candidateService).search(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"NEW,", ",NEW", "NEW,,HIRED"})
+    void searchRejectsEmptyEntriesWithinAStatusList(String statuses) throws Exception {
+        mockMvc.perform(get(BASE).param("status", statuses))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field").value(hasItems("status[]")));
+        verifyNoInteractions(candidateService);
+    }
+
+    @Test
+    void searchAcceptsZeroBoundsAndMaximumPageSize() throws Exception {
+        when(candidateService.search(any())).thenReturn(new PageResponse<>(List.of(), 0, 100, 0, 0));
+
+        mockMvc.perform(get(BASE)
+                        .param("minExperience", "0")
+                        .param("maxExperience", "0")
+                        .param("maxNoticePeriod", "0")
+                        .param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(100));
+    }
+
+    @Test
+    void searchRejectsInvertedExperienceRange() throws Exception {
+        mockMvc.perform(get(BASE).param("minExperience", "5").param("maxExperience", "2"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("experienceRangeValid"))
+                .andExpect(jsonPath("$.errors[0].message").value("minExperience must not exceed maxExperience"));
+        verifyNoInteractions(candidateService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"createdAt", "updatedAt", "firstName", "lastName", "experienceYears", "status"})
+    void searchAcceptsEachWhitelistedSortFieldAndAddsIdLast(String field) throws Exception {
+        when(candidateService.search(any())).thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get(BASE).param("sort", field + ",desc"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<CandidateSearchCriteria> captor = ArgumentCaptor.forClass(CandidateSearchCriteria.class);
+        verify(candidateService).search(captor.capture());
+        assertThat(captor.getValue().toPageable().getSort()).isEqualTo(Sort.by(
+                Sort.Order.desc(field).nullsLast(), Sort.Order.asc("id").nullsLast()));
     }
 
     @Test

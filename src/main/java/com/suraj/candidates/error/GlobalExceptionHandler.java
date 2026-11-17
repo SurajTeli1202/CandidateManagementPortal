@@ -41,7 +41,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                                                                   HttpHeaders headers, HttpStatusCode status,
                                                                   WebRequest request) {
         List<FieldError> errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> new FieldError(error.getField(), error.getDefaultMessage()))
+                .map(error -> new FieldError(error.getField(),
+                        error.isBindingFailure() ? "Invalid value for this parameter" : error.getDefaultMessage()))
                 .sorted(Comparator.comparing(FieldError::field).thenComparing(FieldError::message))
                 .toList();
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request validation failed");

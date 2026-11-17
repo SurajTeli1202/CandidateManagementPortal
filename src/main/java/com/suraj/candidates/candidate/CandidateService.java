@@ -2,6 +2,8 @@ package com.suraj.candidates.candidate;
 
 import com.suraj.candidates.candidate.dto.CandidateRequest;
 import com.suraj.candidates.candidate.dto.CandidateResponse;
+import com.suraj.candidates.candidate.dto.CandidateSearchCriteria;
+import com.suraj.candidates.candidate.dto.PageResponse;
 import com.suraj.candidates.skill.Skill;
 import com.suraj.candidates.skill.SkillRepository;
 import org.slf4j.Logger;
@@ -44,6 +46,12 @@ public class CandidateService {
         Candidate saved = candidateRepository.saveAndFlush(candidate);
         log.info("Created candidate {}", saved.getId());
         return mapper.toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<CandidateResponse> search(CandidateSearchCriteria criteria) {
+        return PageResponse.from(candidateRepository.findAll(
+                CandidateSpecifications.from(criteria), criteria.toPageable()).map(mapper::toResponse));
     }
 
     @Transactional(readOnly = true)
